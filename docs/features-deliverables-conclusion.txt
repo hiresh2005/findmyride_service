@@ -1,0 +1,115 @@
+FEATURES AND FUNCTIONALITIES
+
+
+Functional Requirements
+
+The system must be able to scrape vehicle listings from two Sri Lankan car marketplace websites, ikman.lk and riyasewana.com. From ikman.lk the system covers four vehicle categories: Cars, SUVs and Jeeps, Vans, and Double-Cabs. From riyasewana.com it covers Cars, SUVs, Vans, and Cabs. For every listing found, the system must collect the listing identifier, title, asking price, mileage, year of manufacture, brand, model, engine capacity, fuel type, transmission type, body category, location, seller contact details, listing date, full description text, and all available photographs.
+
+The scraping process must operate in two distinct phases. In the first phase the system navigates through the paginated list pages of each category and collects a lightweight record for every listing, capturing just enough information to identify it and decide whether a full detail fetch is necessary. In the second phase the system opens each listing's individual detail page in a separate browser tab and extracts the complete specification table, description, and photographs. If a listing already exists in the database and was scraped within the last twenty-four hours, the detail page fetch is skipped to avoid placing unnecessary load on the source website and consuming API credits unnecessarily.
+
+Because ikman.lk and riyasewana.com use different field names, price formats, and category schemes, the system must translate data from both sources into a single consistent structure before writing it to the database. Field names such as "make" on riyasewana must be mapped to "brand", "yom" must become "year", and "engine (cc)" must become "engineCapacity". Category values from both sites must be mapped to a shared set of values: Sedan, Hatchback, Wagon, Coupe, Convertible, SUV, Jeep, Cab, Van, and Car.
+
+Every listing must receive a stable, unique identifier that is generated deterministically from the source name and the listing's original ID, for example FMR-IKM-7263810 or FMR-RIY-11237560. Because the same inputs always produce the same identifier, the system can safely run the scraper multiple times without creating duplicate records in the database.
+
+The system must analyse the free-text description of every listing and automatically extract structured information from it without using any external API or service. It must detect how many previous owners the vehicle has had, based on phrases such as "1st owner", "single owner", or "3 owners". It must produce a features list by recognising over thirty distinct vehicle features mentioned in the description, including Sunroof, Panoramic Roof, Reverse Camera, 360 Camera, Apple CarPlay, Android Auto, Bluetooth, Navigation, Cruise Control, Lane Assist, Blind Spot Monitor, Collision Warning, Heated Seats, Leather Seats, Push Start, Keyless Entry, HID and LED headlights, ABS, Airbags, Stability Control, 4WD, and AWD. It must also detect whether the vehicle was maintained by a company or authorised dealer, recording this as a true or false flag, and extract any mention of interior trim colour from the description text.
+
+For listings that include photographs, the system must determine the exterior body paint colour of the vehicle by sending the images to the GPT-4o mini Vision API. Before sending, each image must be resized to 512 by 512 pixels to control API costs. Up to six images per listing are sent in a single API call. The system prompt provided to the model must instruct it to focus only on the body panels of the vehicle, specifically the doors, bonnet, roof, fenders, and bumpers, and to ignore the license plate entirely, because Sri Lankan plates can be red, yellow, white, or blue and are not the car's colour. The model must return one value from a fixed list of colour names: White, Silver, Grey, Black, Red, Maroon, Blue, Dark Blue, Light Blue, Green, Dark Green, Orange, Yellow, Gold, Beige, Brown, or Purple. If the model returns a null or ambiguous result on the first attempt, the system must retry once using a simplified prompt before storing null.
+
+When a listing already has a colour value recorded from the scraper's own specification fields, the image-detected colour must never overwrite it. The system must enforce a strict priority order: a colour scraped directly from the source site's specification fields takes highest priority, followed by a colour extracted from the listing title, followed by the GPT-4o mini vision result. This rule is enforced at the database level using MongoDB conditional update operations.
+
+At the end of every scrape run, the system must identify any listing that did not appear in the current run and mark it as inactive. This is determined by comparing each listing's last-scraped timestamp against the run start time. Any listing not refreshed in the current run is considered to have been removed from the source site and is flagged accordingly so it is not shown to users.
+
+In addition to writing to the normalised vehicles collection, every scrape run must also preserve the original untouched data in source-specific collections named ikman_listings and riyasewana_listings. These collections serve as the permanent source of truth and are never modified or overwritten by the enrichment pipeline.
+
+The frontend application, which is planned as the next phase of development, must allow users to search and filter the full vehicle inventory by brand, model, year range, price range, category, exterior colour, and mileage. Results must be sortable by price, year, and listing date. Each result card must show a thumbnail photograph, the key specification highlights, and a link to the original source listing.
+
+
+Non-Functional Requirements
+
+The system must process multiple listings at the same time rather than one at a time. A concurrency pool with a configurable size, set to three browser tabs by default, allows the scraper to work on several listings in parallel during the detail-fetch phase, achieving meaningfully higher throughput while still behaving responsibly toward the source websites.
+
+The system must not fail an entire scrape run because of a single problematic listing. Errors on individual listings must be caught, logged with a structured message, counted in the run statistics, and skipped so that processing continues. Page navigation must include automatic retry logic of up to three attempts with a delay between retries to handle transient network failures gracefully.
+
+The scraper must introduce a random delay between page requests, configured between two and five seconds by default, to avoid placing excessive load on the source websites. All browser sessions must use a realistic user-agent string and accept-language header so that the scraper behaves as a normal browser would.
+
+The image enrichment pipeline must keep OpenAI API costs to a practical minimum. Using GPT-4o mini with the low-detail image mode, which costs approximately 85 tokens per image, the total cost of processing six images per listing is around USD 0.00012. The system must not re-process listings that have already been enriched unless the operator explicitly passes a rerun flag.
+
+The normalised vehicles collection must never contain duplicate documents for the same listing. MongoDB upsert operations combined with deterministic identifier generation ensure that running the scraper any number of times produces exactly the same result as running it once, with no duplication.
+
+All API keys, including the OpenAI API key, and all database connection strings must be loaded from environment variables and must never be hardcoded in source files. The environment file must be excluded from version control. No user-supplied input is executed as code or inserted into database queries without validation.
+
+The scraper architecture must be designed so that adding a new data source is straightforward. A shared base class handles all browser lifecycle management, navigation retry logic, polite delays, and the concurrency pool. Each concrete scraper only implements the site-specific DOM extraction logic. Adding a third source requires writing three methods without touching any shared infrastructure.
+
+Every significant event during a scrape run must be written to a structured log with a prefix that identifies the source and the action. Log levels must be used consistently so that verbose per-listing detail can be suppressed in production without losing visibility into warnings and errors.
+
+The system must run on any machine with Node.js version 20 or higher and a MongoDB instance, whether hosted locally or in the cloud. All dependencies are managed through npm and Playwright downloads its own browser automatically, so no manual browser installation is required on a new machine.
+
+
+DELIVERABLES OF THE PROJECT
+
+
+Project Starting Point
+
+The project began from a completely empty state. At the start of development there was an empty MongoDB database with no collections or data, a bare Node.js project directory containing only a package.json stub, no integration with any external API, no scraping logic, no data models, and no documentation. The entire data pipeline, enrichment services, and documentation were designed and built from scratch during the course of the project.
+
+
+Itemized List of Deliverables
+
+The first deliverable is the set of three MongoDB Mongoose schemas that define the structure of all database collections. The Vehicle schema covers the normalised master collection with twenty-eight fields including all enrichment timestamps, colour fields, features array, and the isActive lifecycle flag, along with compound database indexes for common query patterns. The IkmanListing schema and RiyasewanaListing schema each preserve raw scraped data from their respective source sites and serve as permanent audit records.
+
+The second deliverable is the IkmanScraper, a fully functional scraper for ikman.lk covering Cars, SUVs and Jeeps, Vans, and Double-Cabs. It handles paginated list traversal with automatic termination at the last page, detail page extraction including the specification table, variant and grade information stored as limitedEditionName, seller contact details, and photo URL construction using the correct ikman CDN format.
+
+The third deliverable is the RiyasewanaScraper, a fully functional scraper for riyasewana.com covering Cars, SUVs, Vans, and Cabs. Its most technically significant feature is the in-session image capture mechanism. Because riyasewana's CDN blocks image requests made from outside a live browser session, the scraper registers a Playwright response listener before navigating to each detail page. As the browser loads the page, it naturally downloads the images within the established session and the listener captures each image buffer passively without making any additional HTTP requests. A regex-based URL filter ensures that images with query parameters in their URLs, such as photo.jpg?v=3, are correctly matched and captured.
+
+The fourth deliverable is the BaseScraper, a shared base class that all concrete scrapers inherit from. It provides Playwright browser and browser context lifecycle management, page navigation with retry and exponential backoff, polite random delays between requests, and the concurrency pool that processes multiple listing stubs in parallel using Promise.all.
+
+The fifth deliverable is the parser layer, consisting of two parser modules, one for each source. Each module contains a list-page parser and a detail-page parser. The parsers handle price string cleaning, mileage and engine capacity casting, year extraction, date parsing, category normalisation, and colour normalisation. The colour normalisation map covers over one hundred raw paint name variations and maps them to twenty standard colour values.
+
+The sixth deliverable is the VehicleService, the central service layer connecting scraper output to the database. It provides an upsert function that writes a normalised vehicle document using deterministic identifier generation and runs text enrichment inline, a setImageColors function that uses a MongoDB aggregation pipeline update to write image-detected colours only to fields currently holding null, and a deactivation function that marks stale listings as inactive at the end of each run.
+
+The seventh deliverable is the TextEnrichmentService, a pure in-memory service with no external dependencies. It provides over thirty feature detection patterns, owner count extraction from both ordinal and numeric phrasing, company-maintained flag detection, interior colour extraction from description text, a colour normalisation function, and a title-based colour extraction function.
+
+The eighth deliverable is the ImageEnrichmentService, the GPT-4o mini Vision API integration. It handles image URL fetching with timeout and Referer headers for CDN-protected sources, image resizing to 512 by 512 JPEG via the sharp library, batched API calls sending up to six images per listing, a structured system prompt with explicit Sri Lankan license plate guidance, retry logic with a simplified prompt, and two public functions: one for URL-based processing used by ikman and one for buffer-based processing used by riyasewana.
+
+The ninth deliverable is the image enrichment batch script, a standalone command-line tool that processes all ikman vehicles awaiting image enrichment. It queries the database for vehicles where imageEnrichedAt is null, supports a limit flag for test runs and a rerun flag for reprocessing, and processes three vehicles in parallel. It is available as npm run enrich:images.
+
+The tenth deliverable is the scraper configuration file, a single central module defining all scraping targets, category URLs, browser settings, concurrency values, delay ranges, and scheduled run times for both sources. All tuning parameters are in one place, making it straightforward to adjust crawling behaviour without modifying any scraper code.
+
+The eleventh deliverable is the architecture documentation and diagrams, provided as a self-contained HTML file containing six standard black and white architecture diagrams: the four-layer system architecture, the vehicle document schema as an entity-relationship diagram, the two-phase scraping process as a flowchart, the riyasewana image capture mechanism as a UML sequence diagram, the GPT-4o mini API call structure and retry flow, and the data normalisation pipeline from two sources to one collection.
+
+The twelfth deliverable is the academic report, comprising the Literature Review chapter covering background research and gap analysis, the Implementation chapter providing a detailed technical description of the entire pipeline, the Validation chapter with a full test plan and test cases, and the Appendices containing the configuration reference, schema reference, and features and deliverables documentation.
+
+
+CHAPTER 06
+
+CONCLUSION AND FUTURE WORK
+
+
+6.1 Conclusion
+
+This project addressed a real and practical problem faced by vehicle buyers in Sri Lanka: car listings are spread across multiple websites, each with its own format, layout, and field naming conventions, with no single place to search and compare them consistently. The goal was to build a data pipeline that collects listings from multiple sources automatically, standardises them into a unified structure, and enriches each record with attributes the source sites do not provide directly, such as a structured features list and a detected exterior colour.
+
+The resulting system, FindMyRide, successfully scrapes listings from ikman.lk and riyasewana.com across eight vehicle categories, normalises them into a single MongoDB collection, and enriches each listing through two sequential phases: a text-based regex pipeline that runs inline during the database write, and an image-based pipeline powered by the GPT-4o mini Vision API.
+
+Several non-trivial engineering problems were encountered and solved during development. The most significant was the CDN image protection on riyasewana.com, which blocked all post-scrape HTTP requests for image files. The solution was to capture images passively during the browser's own page load using Playwright's response event listener, so the images arrive within the browser's established, trusted session without any additional requests being made. An early implementation using a route interception approach was found to double the number of HTTP requests and cause timeouts for listings with larger image sets; the response listener approach eliminated both problems.
+
+A second issue was a silent bug in the image URL filter, where a glob pattern used to match image filenames failed entirely for URLs that contained query parameters such as a version string. Replacing the glob with a proper regular expression resolved the issue and also extended coverage to WebP and PNG image formats without any additional code changes.
+
+Data normalisation across two sources with different schema conventions required a careful parser layer that maps field names, cleans price and mileage strings, and translates category values into a shared enumeration. The colour normalisation map, which covers over a hundred raw paint name variations, ensures that a value recorded as "Pearl White" on one site and "Solid White" on another both resolve to the single standard value "White" in the vehicles collection.
+
+Finally, the use of GPT-4o mini with low-detail image mode kept the cost of AI-based colour enrichment to approximately USD 0.00012 per vehicle, making it economically practical to enrich every listing in the database. A structured system prompt with explicit guidance about Sri Lankan license plates, which can be red, yellow, white, or blue and are commonly mistaken for the car's body colour, significantly improved the accuracy of the model's responses.
+
+At the time of writing, the data pipeline is fully operational. The backend collects, normalises, and enriches vehicle listings from two sources across eight categories and stores them in a queryable MongoDB database ready for the frontend application.
+
+
+6.2 Future Work
+
+While the core data pipeline is complete, several important extensions are planned for the next phase of the project.
+
+The first and most immediate next step is automated scheduled scraping. At present, a scrape run must be triggered manually by executing a command. In the production system this will be replaced by a job scheduler so that the database is kept current without any human intervention. The node-cron library is already included in the project's dependencies for this purpose. The planned schedule is for ikman.lk to be scraped every six hours, reflecting the high volume of new listings posted throughout the day on that platform, and for riyasewana.com to be scraped once daily at 3:00 AM, which aligns with its lower posting frequency. Once deployed, the scheduler will run continuously as part of the main server process and trigger scrape runs automatically on the defined timetable.
+
+The second planned feature is real-time listing removal detection. Currently a listing is only marked as inactive when it does not appear in a full scrape run. This means there is always a gap between when a seller removes their ad from the source site and when that change is reflected in the FindMyRide database. During that gap, users of the frontend application would see listings that no longer exist. To eliminate this delay, a lightweight removal-check service will be built that runs on a frequent schedule, for example every thirty minutes, and verifies that each currently active listing still exists on its source site. For each active vehicle, the service makes a single HTTP request to the original listing URL and checks the response. If the page returns a not-found or listing-removed response, the vehicle document is immediately updated with isActive set to false and the change is reflected in the frontend at the next page load. This service is deliberately kept separate from the full scraper because it only needs to verify existence and does not need to re-read any content, making it fast and inexpensive to run frequently.
+
+The third planned improvement is the adoption of a more powerful vision model for image-based colour detection. GPT-4o mini was selected for cost efficiency during the development phase and performs well for the majority of listings. However, it occasionally produces incorrect results for vehicles with complex metallic or pearl finishes, two-tone paint schemes, or listings with low-quality photographs. As the system moves toward production, the image enrichment pipeline will be evaluated with more capable models, including the full GPT-4o model and potentially a fine-tuned vision model trained specifically on vehicle exterior colour classification. Because the ImageEnrichmentService accepts the model name as a single configuration parameter, switching models requires changing one value without any structural code changes.
+
+Beyond these three priority items, the remaining planned work includes building the Next.js frontend application and its supporting REST API, which will expose the vehicles collection through search and filter endpoints. The frontend will allow users to search by brand, model, year range, price range, category, and exterior colour, view full listing detail pages with the complete photo gallery, and follow a direct link to the original source listing. Additional data sources, specifically other Sri Lankan vehicle marketplace websites, will be added to broaden the inventory available to users. Once the frontend is live, user-facing features such as saved searches, price-drop alerts, and email notifications are planned, which will require a user authentication layer as a further development phase.

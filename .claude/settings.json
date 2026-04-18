@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:riyasewana.com)",
+      "Bash(node src/scripts/debug-riyasewana.js)",
+      "Bash(node -e ' *)",
+      "Bash(MAX_LISTINGS_PER_CATEGORY=5 npm run scrape:riyasewana)"
+    ]
+  }
+}

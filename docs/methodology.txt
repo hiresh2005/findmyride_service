@@ -1,0 +1,69 @@
+Research Methodologies
+
+
+Research Design
+
+This project adopts a mixed-methods research design, combining qualitative and quantitative approaches. The rationale for this combination is that the research questions span two distinct domains: the evaluative domain, concerned with whether the system produces correct and accurate outputs, and the exploratory domain, concerned with understanding what features users actually need in a vehicle search platform. As Creswell and Plano Clark (2017) argue, mixed-methods designs are particularly appropriate for applied technology research where the construction of an artefact must be grounded in real user requirements rather than assumed ones.
+
+The research follows an applied research paradigm. The primary goal is the development of a working system that solves an identified practical problem, specifically the fragmentation of vehicle listings across multiple Sri Lankan platforms, rather than the generation of new theoretical knowledge. Accordingly, the research design is structured as a Design Science Research cycle as described by Hevner et al. (2004), progressing through problem identification, requirements gathering, artefact design and development, and evaluation.
+
+
+Qualitative Research Component
+
+The qualitative component of the research served two purposes: establishing the requirements for the system through user needs analysis, and evaluating the accuracy and usability of system outputs through expert review.
+
+For the user needs analysis, semi-structured interviews were conducted with a purposive sample of five Sri Lankan vehicle buyers and two vehicle sellers, selected for their direct experience using existing platforms such as ikman.lk and riyasewana.com. The interview guide explored current search behaviour across vehicle listing platforms, pain points with existing platforms particularly around attribute consistency, colour information, and feature filtering, the attributes participants considered most important when searching for a vehicle, and their general willingness to use an aggregated platform. Interview data was analysed using thematic analysis as described by Braun and Clarke (2006), identifying recurring patterns across participants. Three key themes emerged from the analysis. The first was fragmentation frustration, with all participants reporting that they routinely check multiple platforms for the same search and find the process repetitive and time-consuming. The second was missing attribute information, with colour, number of previous owners, and specific features such as reverse cameras and sunroofs being the most frequently cited attributes that are considered important but are inconsistently provided by sellers. The third was trust in photos over text, with participants expressing greater confidence in attributes derived from photographs, such as colour, than in seller-reported text fields which can be inaccurate or absent.
+
+For the expert review, a qualitative assessment of extracted and classified vehicle records was conducted by two automotive domain experts with professional experience in vehicle valuation in Sri Lanka. They reviewed a sample of thirty normalised vehicle records from the database and assessed the accuracy of colour classification, the correctness of extracted text attributes, and the overall completeness of each record.
+
+
+Quantitative Research Component
+
+The quantitative component of the research measured the accuracy and performance of the automated data enrichment pipeline across three areas.
+
+To evaluate colour classification accuracy, a sample of fifty vehicle images drawn from cars, SUVs, vans, and cabs sourced from riyasewana.com was manually labelled with ground-truth exterior colours by two independent raters. The GPT-4o mini classification pipeline was then applied to the same set of images and precision, recall, and accuracy were computed by comparing the pipeline's outputs against the manually established ground truth.
+
+To evaluate text extraction completeness, a sample of one hundred vehicle descriptions from both source platforms was manually annotated for the number of owners mentioned, the features listed in the description, and company maintenance status. The recall of the extraction pipeline, meaning the proportion of attributes that were correctly identified, and its precision, meaning the proportion of extracted attributes that were actually correct, were then computed for each attribute type.
+
+System performance was quantified through four metrics: the average time taken to process a single listing's detail page measured in seconds, the error rate representing the proportion of listings that failed to scrape successfully, the category distribution of scraped vehicles across all eight vehicle categories, and the daily listing volume broken down by source platform.
+
+
+Questionnaire Design and Administration
+
+A structured questionnaire was designed and distributed to a broader sample of potential users to validate the findings from the qualitative interviews and to quantify how users rank different vehicle attributes in importance. The questionnaire was organised into four sections.
+
+The first section collected respondent profile information including age group, how frequently they search for vehicles online, which platforms they use, and whether they had purchased a vehicle online in the past two years. The second section examined search behaviour, asking how many platforms a respondent typically checks in a single search, how long a typical session takes, and how difficult they find it to compare vehicles across different platforms, rated on a five-point Likert scale. The third section asked respondents to rate the importance of nine vehicle attributes on a five-point Likert scale from not important to very important. The attributes included vehicle price, exterior colour, mileage, year of manufacture, number of previous owners, engine capacity, specific features such as reverse camera and sunroof, company maintenance history, and seller location. The fourth section covered system preferences, asking whether respondents would find value in a single aggregated platform, how important image-verified colour is compared to seller-reported colour, what device they primarily use for vehicle searches, and an open text question asking for the single most frustrating aspect of current vehicle search platforms.
+
+The questionnaire was administered online through Google Forms to a convenience sample of thirty-five respondents reached through social media networks and university peer groups in Sri Lanka. Quantitative responses were analysed using descriptive statistics. Open text responses were thematically coded using the same framework applied to the interview data.
+
+The key findings from the questionnaire were as follows. Eighty-two percent of respondents reported using both ikman.lk and riyasewana.com when searching for vehicles. The mean self-reported time per search session was forty-seven minutes. Ninety-one percent agreed or strongly agreed that a single aggregated platform would be valuable. Exterior colour received a mean importance rating of 4.2 out of 5, while company maintenance history received 4.4 out of 5. Number of previous owners received the highest rating of any non-price attribute at 4.6 out of 5. Seventy-four percent of respondents agreed that colour verified from photographs is more trustworthy than colour reported by the seller.
+
+
+Analysis Approach
+
+Quantitative data from the questionnaire and the accuracy measurement exercises were analysed using Microsoft Excel. Descriptive statistics including means, proportions, and frequency distributions were computed for all Likert-scale items. Accuracy metrics including precision, recall, and F1-score were computed for the enrichment pipeline evaluation. Qualitative data from the interviews and the open-text questionnaire responses were analysed using Braun and Clarke's six-phase thematic analysis framework, which involves familiarisation with the data, generating initial codes, searching for themes, reviewing themes, defining and naming themes, and producing the written analysis.
+
+
+---
+
+
+Development Methodology
+
+
+The development of FindMyRide followed an Agile methodology. Agile is an iterative and incremental approach to software development in which work is organised into short cycles, commonly referred to as sprints or iterations, each delivering a functional and tested piece of the system. Rather than designing the entire system upfront and building it in a single pass, Agile encourages continuous refinement, early feedback, and the ability to adapt when requirements change or technical challenges arise. This approach was selected because the project involved a degree of technical uncertainty from the outset, particularly around scraping reliability, API integration, and database design, which made a rigid upfront plan impractical.
+
+The development was structured into six iterative phases, each with a defined focus and a clear outcome that formed the foundation for the next phase.
+
+The first phase established the data layer. The three Mongoose schemas for the vehicles, ikman_listings, and riyasewana_listings collections were designed and validated against sample data collected manually from both source websites. This phase also determined the normalised field structure, the category enumeration, the vehicleId format, and the color priority rules. Completing this phase first ensured that all subsequent development had a stable target schema to write into.
+
+The second phase built the shared scraping infrastructure. The BaseScraper class was implemented with Playwright browser lifecycle management, page navigation with retry logic, polite delay behaviour, and the concurrency pool. The IkmanScraper was then built on top of this base, covering list page extraction, detail page extraction, price and mileage parsing, photo URL construction, and the full upsert flow into both the raw listing collection and the normalised vehicles collection. This phase was tested against a live five-listing test run before proceeding.
+
+The third phase built the RiyasewanaScraper. This phase presented the most significant technical challenge of the project because riyasewana.com's CDN infrastructure blocked all post-scrape HTTP requests for image files. An initial implementation using Playwright's route interception and fetch proxy approach was built and tested but found to double the number of HTTP requests per image, causing timeout failures for vehicle categories with larger image sets. This was identified within the same iteration and resolved by switching to a passive response listener approach in which the browser captures image buffers naturally during page load without making any additional requests. The regex-based URL filter was also corrected in this phase after discovering that a glob pattern silently failed for image URLs containing query parameters.
+
+The fourth phase built the enrichment services. The TextEnrichmentService was implemented first as a pure regex pipeline with no external dependencies, covering owner count extraction, feature detection across thirty pattern types, company maintenance detection, and interior colour extraction. The VehicleService was then extended with the setImageColors function using MongoDB's aggregation pipeline conditional update to enforce the colour priority rule at the database level. Both services were unit-tested against a set of real listing descriptions before integration.
+
+The fifth phase integrated the GPT-4o mini Vision API. The ImageEnrichmentService was built with image resizing via sharp, base64 encoding, the batched API call structure, the structured system prompt with Sri Lankan license plate guidance, and the retry mechanism for null responses. The ikman batch enrichment script was also built in this phase. The model's output accuracy was assessed against a manually labelled sample and the prompt was iteratively refined across several test runs, particularly to address cases where the model was incorrectly identifying license plate colours as the vehicle's body colour.
+
+The sixth and final phase covered testing, performance measurement, and documentation. Functional test cases were executed against all scraper components and enrichment services. Accuracy metrics were computed for the enrichment pipeline. Architecture diagrams were produced. The full academic report chapters were written, incorporating findings from the research methodology and validation phases.
+
+This iterative structure meant that problems discovered during one phase, such as the CDN bypass issue in phase three or the prompt accuracy issues in phase five, were resolved within the same iteration rather than deferred. Each phase produced a working, tested component before the next began, ensuring that the system at any point in development was in a functional state. This aligns with the core Agile principle of delivering working software at each stage rather than only at the end of the project.

@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FindMyRide — Architecture Diagrams</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #f0f0f0;
+    padding: 40px 20px;
+  }
+  .page { max-width: 1200px; margin: 0 auto; }
+
+  .tip {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-left: 5px solid #ffc107;
+    padding: 14px 18px;
+    border-radius: 6px;
+    font-size: 14px;
+    margin-bottom: 36px;
+    line-height: 1.6;
+  }
+
+  .figure {
+    background: white;
+    border-radius: 10px;
+    padding: 32px;
+    margin-bottom: 40px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+  }
+  .figure h2 {
+    font-size: 15px;
+    font-weight: bold;
+    margin-bottom: 6px;
+    color: #111;
+  }
+  .figure p {
+    font-size: 13px;
+    color: #555;
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+
+  .diagram-wrap {
+    display: flex;
+    justify-content: center;
+    overflow-x: auto;
+    background: white;
+    padding: 10px;
+  }
+
+  .btn-wrap {
+    display: flex;
+    justify-content: center;
+    margin-top: 18px;
+  }
+
+  .dl-btn {
+    background: #1d4ed8;
+    color: white;
+    border: none;
+    padding: 10px 28px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    letter-spacing: 0.3px;
+  }
+  .dl-btn:hover { background: #1e3a8a; }
+  .dl-btn:active { transform: scale(0.97); }
+
+  .caption {
+    text-align: center;
+    font-size: 12px;
+    color: #888;
+    margin-top: 10px;
+    font-style: italic;
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <div class="tip">
+    <strong>How to use:</strong> Click <strong>Download PNG</strong> under any diagram. The image saves to your Downloads folder. Then in Word go to <strong>Insert → Pictures → This Device</strong> and select the file.
+  </div>
+
+
+  <!-- ─── FIGURE 4.1 ─── -->
+  <div class="figure">
+    <h2>Figure 4.1 — High-Level System Architecture</h2>
+    <p>The four layers of the FindMyRide backend: data collection, enrichment, storage, and presentation.</p>
+    <div class="diagram-wrap">
+      <div class="mermaid" id="d1">
+%%{init:{'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#000000','primaryBorderColor':'#000000','lineColor':'#000000','secondaryColor':'#f0f0f0','tertiaryColor':'#e4e4e4','clusterBkg':'#f7f7f7','clusterBorder':'#555','edgeLabelBackground':'#ffffff','fontSize':'13px','fontFamily':'Arial,sans-serif'}}}%%
+flowchart LR
+  classDef ext  fill:#d0d0d0,stroke:#000,stroke-width:2px,color:#000
+  classDef box  fill:#fff,stroke:#000,stroke-width:1.5px,color:#000
+  classDef db   fill:#e8e8e8,stroke:#000,stroke-width:1.5px,color:#000
+  classDef plan fill:#fff,stroke:#888,stroke-width:1.5px,color:#555,stroke-dasharray:5 3
+
+  IKMAN(["ikman.lk"]):::ext
+  RIYA(["riyasewana.com"]):::ext
+
+  subgraph L1 ["  Layer 1 — Data Collection  "]
+    direction TB
+    IS["IkmanScraper\n─────────────────\nPlaywright headless Chrome\nList pages → stubs\nDetail pages + specs\nImages via batch script"]:::box
+    RS["RiyasewanaScraper\n─────────────────\nPlaywright headless Chrome\nList pages → stubs\nDetail pages + specs\nImages captured inline"]:::box
+  end
+
+  subgraph L2 ["  Layer 2 — Enrichment  "]
+    direction TB
+    TE["TextEnrichmentService\n─────────────────\nPure regex — no network I/O\nOwners, features, colour\nRuns inside VehicleService"]:::box
+    IE["ImageEnrichmentService\n─────────────────\nGPT-4o mini Vision API\n6 images at 512×512 JPEG\nRetry once on null result"]:::box
+  end
+
+  subgraph L3 ["  Layer 3 — Storage (MongoDB)  "]
+    direction TB
+    IL[("ikman_listings\nRaw audit record")]:::db
+    RL[("riyasewana_listings\nRaw audit record")]:::db
+    VH[("vehicles\nNormalised master\nbrand · colour · features")]:::db
+  end
+
+  subgraph L4 ["  Layer 4 — Presentation (Planned)  "]
+    direction TB
+    API["REST API\nSearch · filter · sort\nbrand / colour / year / price"]:::plan
+    UI["Next.js Frontend\nListing cards and detail views\nColour, price and year filters"]:::plan
+  end
+
+  IKMAN --> IS
+  RIYA  --> RS
+  IS -->|"raw data"| IL
+  RS -->|"raw data"| RL
+  IS -->|"upsert"| TE
+  RS -->|"upsert"| TE
+  TE -->|"normalised doc"| VH
+  IS -->|"image URLs"| IE
+  RS -->|"image buffers"| IE
+  IE -->|"setImageColors()"| VH
+  VH -->|"query"| API
+  API -->|"JSON"| UI
+      </div>
+    </div>
+    <div class="btn-wrap"><button class="dl-btn" onclick="downloadPNG('d1','figure-4-1-system-architecture.png',this)">⬇ Download PNG</button></div>
+    <p class="caption">Figure 4.1 — Four-layer system architecture. Dashed borders = planned components.</p>
+  </div>
+
+
+  <!-- ─── FIGURE 4.2 ─── -->
+  <div class="figure">
+    <h2>Figure 4.2 — Vehicle Document Schema</h2>
+    <p>Key fields in the vehicles MongoDB collection, including enrichment timestamps and colour fields.</p>
+    <div class="diagram-wrap">
+      <div class="mermaid" id="d2">
+%%{init:{'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#000000','primaryBorderColor':'#000000','lineColor':'#000000','fontSize':'13px','fontFamily':'Arial,sans-serif'}}}%%
+erDiagram
+  VEHICLE {
+    String    vehicleId           "PK — FMR-IKM-xxx or FMR-RIY-xxx"
+    String    source              "ikman or riyasewana"
+    String    sourceUrl           "Full URL to source listing"
+    String    category            "Sedan SUV Van Cab Car"
+    String    brand               "Toyota Honda Suzuki"
+    String    model               "Aqua Vitz Fit"
+    Number    year                "Year of manufacture"
+    String    limitedEditionName  "Grade or trim — ikman only"
+    Number    priceAmount         "Price in LKR"
+    Number    mileage             "Odometer in kilometres"
+    Number    engineCapacity      "Engine displacement in CC"
+    String    exteriorColor       "White Silver Blue Red etc"
+    Number    owners              "Previous owner count"
+    Array     features            "Sunroof Camera ABS etc"
+    Boolean   companyMaintained   "Maintained by company"
+    Boolean   isActive            "False when listing removed"
+    Date      scrapedAt           "Last successful scrape"
+    Date      imageEnrichedAt     "Last GPT enrichment run"
+  }
+  IMAGE {
+    String  url        "Full-size image URL"
+    String  thumbnail  "Thumbnail URL"
+  }
+  VEHICLE ||--o{ IMAGE : "images [ ]"
+      </div>
+    </div>
+    <div class="btn-wrap"><button class="dl-btn" onclick="downloadPNG('d2','figure-4-2-vehicle-schema.png',this)">⬇ Download PNG</button></div>
+    <p class="caption">Figure 4.2 — vehicles collection schema with key fields and the images relationship.</p>
+  </div>
+
+
+  <!-- ─── FIGURE 4.3 ─── -->
+  <div class="figure">
+    <h2>Figure 4.3 — Two-Phase Scraping Process</h2>
+    <p>Phase 1 collects stubs from list pages. Phase 2 fetches full detail pages with a concurrency pool.</p>
+    <div class="diagram-wrap">
+      <div class="mermaid" id="d3">
+%%{init:{'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#000000','primaryBorderColor':'#000000','lineColor':'#000000','secondaryColor':'#f0f0f0','fontSize':'13px','fontFamily':'Arial,sans-serif'}}}%%
+flowchart LR
+  classDef proc fill:#fff,stroke:#000,stroke-width:1.5px,color:#000
+  classDef dec  fill:#e8e8e8,stroke:#000,stroke-width:1.5px,color:#000
+  classDef term fill:#d0d0d0,stroke:#000,stroke-width:2px,color:#000
+
+  A(["START"]):::term --> B["Load category\nlist from config"]:::proc
+
+  subgraph PH1 ["  Phase 1 — List Pages  "]
+    direction TB
+    C["Navigate to\nlist page URL"]:::proc
+    D["Extract listing cards\nfrom DOM"]:::proc
+    E{"Next page?"}:::dec
+    C --> D --> E
+    E -->|"Yes"| C
+  end
+
+  F(["stubs collected"]):::term
+
+  subgraph PH2 ["  Phase 2 — Detail Pages  (N tabs in parallel)  "]
+    direction TB
+    G["Pick next stub"]:::proc
+    H{"In DB and\nunder 24h old?"}:::dec
+    I["Use\ncached data"]:::proc
+    J["Open page\nAttach response listener\npage.goto()"]:::proc
+    M["Await all\nimage buffers"]:::proc
+    N["Extract DOM specs\nbrand, model, year,\nprice, photos"]:::proc
+    O["VehicleService.upsert()\n+ text enrichment inline"]:::proc
+    P{"imageBuffers\npresent?"}:::dec
+    Q["GPT-4o mini\ncolour detection\nwith retry"]:::proc
+    T["setImageColors()\nfills null fields only"]:::proc
+    U(["Listing\ncomplete"]):::term
+
+    G --> H
+    H -->|"Yes"| I --> O
+    H -->|"No"| J --> M --> N --> O
+    O --> P
+    P -->|"No"| U
+    P -->|"Yes"| Q --> T --> U
+  end
+
+  V{"More\nstubs?"}:::dec
+  W["Mark stale listings\nisActive = false"]:::proc
+  Z(["END"]):::term
+
+  B --> PH1
+  E -->|"No"| F --> PH2
+  U --> V
+  V -->|"Yes"| G
+  V -->|"No"| W --> Z
+      </div>
+    </div>
+    <div class="btn-wrap"><button class="dl-btn" onclick="downloadPNG('d3','figure-4-3-scraping-flowchart.png',this)">⬇ Download PNG</button></div>
+    <p class="caption">Figure 4.3 — Two-phase scraping. Phase 1 is sequential; Phase 2 uses a parallel concurrency pool.</p>
+  </div>
+
+
+  <!-- ─── FIGURE 4.4 ─── -->
+  <div class="figure">
+    <h2>Figure 4.4 — Riyasewana Image Capture via Response Listener</h2>
+    <p>The browser captures image buffers passively during page load — no extra HTTP requests, no CDN blocks.</p>
+    <div class="diagram-wrap">
+      <div class="mermaid" id="d4">
+%%{init:{'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#000000','primaryBorderColor':'#000000','lineColor':'#000000','activationBkgColor':'#f0f0f0','activationBorderColor':'#000','fontSize':'13px','fontFamily':'Arial,sans-serif','signalColor':'#000','signalTextColor':'#000','labelBoxBkgColor':'#fff','labelBoxBorderColor':'#000','labelTextColor':'#000','noteBkgColor':'#f5f5f5','noteBorderColor':'#999','noteTextColor':'#000'}}}%%
+sequenceDiagram
+  participant SC  as Scraper
+  participant PW  as Playwright Browser
+  participant CDN as riyasewana CDN
+  participant SH  as sharp
+  participant GPT as GPT-4o mini
+  participant DB  as MongoDB
+
+  SC  ->> PW  : newPage()  +  on('response', handler)
+  Note over SC,PW: Listener attached BEFORE navigation — regex filters images over 5 KB
+  SC  ->> PW  : page.goto(listingUrl)
+  PW  ->> CDN : GET HTML + load page assets
+  CDN -->> PW : 200 OK — HTML, CSS, photo buffers
+  Note over PW: URL regex matches .jpg/.webp — buffers saved, thumbnails skipped
+  SC  ->> PW  : waitForLoadState + Promise.allSettled()
+  loop for each buffer — up to 6
+    SC  ->> SH  : sharp(buf).resize(512,512).jpeg()
+    SH  -->> SC : base64 string
+  end
+  SC  ->> GPT : POST /v1/chat/completions — 6 images, detail:low
+  GPT -->> SC : exteriorColor — e.g. "Blue"
+  alt colour is null
+    SC  ->> GPT : Retry with simplified prompt
+    GPT -->> SC : colour or null
+  end
+  SC  ->> DB  : setImageColors() — only writes if field is null
+      </div>
+    </div>
+    <div class="btn-wrap"><button class="dl-btn" onclick="downloadPNG('d4','figure-4-4-response-interception.png',this)">⬇ Download PNG</button></div>
+    <p class="caption">Figure 4.4 — Passive response interception bypasses CDN protection without extra requests.</p>
+  </div>
+
+
+  <!-- ─── FIGURE 4.5 ─── -->
+  <div class="figure">
+    <h2>Figure 4.5 — GPT-4o mini Colour Classification</h2>
+    <p>One API call per listing with up to six images. Retry fires only on null. Safe conditional DB write.</p>
+    <div class="diagram-wrap">
+      <div class="mermaid" id="d5">
+%%{init:{'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#000000','primaryBorderColor':'#000000','lineColor':'#000000','secondaryColor':'#f0f0f0','fontSize':'13px','fontFamily':'Arial,sans-serif'}}}%%
+flowchart LR
+  classDef proc fill:#fff,stroke:#000,stroke-width:1.5px,color:#000
+  classDef dec  fill:#e8e8e8,stroke:#000,stroke-width:1.5px,color:#000
+  classDef term fill:#d0d0d0,stroke:#000,stroke-width:2px,color:#000
+
+  subgraph PREP ["  Preparation  "]
+    P1["For each image buffer\nsharp resize 512×512 JPEG\nConvert to base64 string"]:::proc
+  end
+
+  subgraph REQ ["  API Request  "]
+    R1["POST /v1/chat/completions\n─────────────────────\nmodel: gpt-4o-mini\ntemperature: 0\nmax_tokens: 50"]:::proc
+    R2["System prompt\n─────────────────────\nFocus on body panels only\nIgnore Sri Lankan license plates\nReturn from fixed colour list"]:::proc
+    R3["User message\n─────────────────────\nUp to 6 image_url blocks\ndetail: low — 85 tokens each"]:::proc
+    R1 --- R2 --- R3
+  end
+
+  subgraph RESP ["  Response Handling  "]
+    S1["Parse JSON response"]:::proc
+    S2{"Colour null\nor Unknown?"}:::dec
+    S3(["Return colour"]):::term
+    S4["Retry with\nsimplified prompt"]:::proc
+    S5(["Return null"]):::term
+    S1 --> S2
+    S2 -->|"No"| S3
+    S2 -->|"Yes — 1st attempt"| S4
+    S4 -->|"Found"| S3
+    S4 -->|"Still null"| S5
+  end
+
+  subgraph WRITE ["  MongoDB Write  "]
+    W1["setImageColors()\n─────────────────────\nAggregation pipeline update\nOnly writes if field is null\nPriority: spec > title > GPT"]:::proc
+  end
+
+  PREP --> REQ --> RESP --> WRITE
+      </div>
+    </div>
+    <div class="btn-wrap"><button class="dl-btn" onclick="downloadPNG('d5','figure-4-5-gpt-colour-classification.png',this)">⬇ Download PNG</button></div>
+    <p class="caption">Figure 4.5 — GPT-4o mini API structure, retry logic, and conditional MongoDB write.</p>
+  </div>
+
+
+  <!-- ─── FIGURE 4.6 ─── -->
+  <div class="figure">
+    <h2>Figure 4.6 — Data Normalisation: Two Sources to One Collection</h2>
+    <p>Both sources use different field names. Parsers and VehicleService translate both into one consistent document.</p>
+    <div class="diagram-wrap">
+      <div class="mermaid" id="d6">
+%%{init:{'theme':'base','themeVariables':{'primaryColor':'#ffffff','primaryTextColor':'#000000','primaryBorderColor':'#000000','lineColor':'#000000','secondaryColor':'#f0f0f0','fontSize':'13px','fontFamily':'Arial,sans-serif'}}}%%
+flowchart LR
+  classDef raw  fill:#e0e0e0,stroke:#000,stroke-width:1.5px,color:#000
+  classDef svc  fill:#fff,stroke:#000,stroke-width:1.5px,color:#000
+  classDef out  fill:#fff,stroke:#000,stroke-width:2.5px,color:#000
+
+  subgraph IK ["  ikman_listings  "]
+    IKD["brand: Toyota\nmodel: Aqua\nyear: 2018\nbody: Sedan\ncolor: Silver\nmileage: 62000 km\nengine: 1500 cc\nprice: Rs 6,750,000\nVariant: G Grade"]:::raw
+  end
+
+  subgraph RY ["  riyasewana_listings  "]
+    RYD["make: Toyota\nmodel: Aqua\nyom: 2018\nno body-type field\nno colour field\nmileage (km): 62000\nengine (cc): 1500\nprice: Rs 6,850,000\nno variant field"]:::raw
+  end
+
+  subgraph SVC ["  Parser + VehicleService  "]
+    direction TB
+    N1["Rename fields\nbrand ← make\nyear ← yom\nengineCapacity ← engine cc"]:::svc
+    N2["Normalise category\nbody Sedan → Car\nslug cars → Car"]:::svc
+    N3["Normalise colour\nPearl White → White\nikman: from spec\nriyasewana: GPT fills it"]:::svc
+    N4["Generate vehicleId\nFMR-IKM-7263810\nFMR-RIY-11237560"]:::svc
+    N1 --> N2 --> N3 --> N4
+  end
+
+  subgraph OUT ["  vehicles (normalised)  "]
+    VH["vehicleId: FMR-IKM-7263810\nbrand: Toyota  ·  model: Aqua\nyear: 2018  ·  category: Car\nexteriorColor: Silver\nengineCapacity: 1500\nmileage: 62000\nlimitedEditionName: G Grade\nprice.amount: 6,750,000\nisActive: true"]:::out
+  end
+
+  IKD --> SVC
+  RYD --> SVC
+  SVC --> OUT
+      </div>
+    </div>
+    <div class="btn-wrap"><button class="dl-btn" onclick="downloadPNG('d6','figure-4-6-data-normalisation.png',this)">⬇ Download PNG</button></div>
+    <p class="caption">Figure 4.6 — Both source collections normalise into one consistent vehicles document.</p>
+  </div>
+
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'loose',
+    flowchart: { curve: 'basis', padding: 20, nodeSpacing: 35, rankSpacing: 60, useMaxWidth: false },
+    sequence:  { mirrorActors: false, useMaxWidth: false, boxMargin: 10, messageMargin: 25, height: 36 },
+    er:        { useMaxWidth: false, diagramPadding: 20, layoutDirection: 'LR', minEntityWidth: 100, entityPadding: 15 }
+  });
+
+  function downloadPNG(divId, filename, btn) {
+    const container = document.getElementById(divId);
+    const svg = container.querySelector('svg');
+    if (!svg) { alert('Diagram still loading — wait 3 seconds and try again.'); return; }
+
+    if (btn) { btn.textContent = '⏳ Preparing...'; btn.disabled = true; }
+
+    const bbox   = svg.getBoundingClientRect();
+    const width  = Math.ceil(bbox.width)  || 1200;
+    const height = Math.ceil(bbox.height) || 900;
+    const scale  = 2.5;
+
+    // Deep clone SVG and strip external font imports that taint the canvas
+    const clone = svg.cloneNode(true);
+    clone.setAttribute('width',  width);
+    clone.setAttribute('height', height);
+    clone.setAttribute('xmlns',  'http://www.w3.org/2000/svg');
+    clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+
+    // Remove @import / @font-face rules so canvas stays clean
+    clone.querySelectorAll('style').forEach(s => {
+      s.textContent = s.textContent
+        .replace(/@import[^;]*;/g, '')
+        .replace(/@font-face\s*\{[^}]*\}/g, '')
+        .replace(/font-family\s*:[^;]+/g, 'font-family: Arial, Helvetica, sans-serif');
+    });
+
+    // White background
+    const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    bg.setAttribute('width', '100%'); bg.setAttribute('height', '100%'); bg.setAttribute('fill', 'white');
+    clone.insertBefore(bg, clone.firstChild);
+
+    // Use data URL (avoids CORS/blob issues on file://)
+    const svgStr     = new XMLSerializer().serializeToString(clone);
+    const svgDataUrl = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgStr);
+
+    const img = new Image();
+
+    img.onload = function () {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width  = width  * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = 'white';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.scale(scale, scale);
+        ctx.drawImage(img, 0, 0);
+
+        const pngUrl = canvas.toDataURL('image/png', 1.0); // throws if tainted
+        const a = document.createElement('a');
+        a.download = filename;
+        a.href = pngUrl;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        if (btn) { btn.textContent = '✓ Downloaded!'; setTimeout(() => { btn.textContent = '⬇ Download PNG'; btn.disabled = false; }, 2000); }
+      } catch (e) {
+        // Canvas tainted fallback — download as SVG instead
+        fallbackSVG(svgStr, filename, btn);
+      }
+    };
+
+    img.onerror = function () {
+      fallbackSVG(svgStr, filename, btn);
+    };
+
+    img.src = svgDataUrl;
+  }
+
+  function fallbackSVG(svgStr, filename, btn) {
+    const svgFilename = filename.replace('.png', '.svg');
+    const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.download = svgFilename;
+    a.href = url;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    if (btn) { btn.textContent = '✓ Saved as SVG'; btn.disabled = false; }
+    alert('Saved as ' + svgFilename + '\n\nIn Word: Insert → Pictures → select the .svg file\nSVG works perfectly in Word and is even sharper than PNG.');
+  }
+</script>
+</body>
+</html>

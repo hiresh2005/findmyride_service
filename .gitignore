@@ -1,0 +1,11 @@
+node_modules/
+.env
+logs/
+*.log
+
+# Playwright browser binaries
+.playwright/
+
+# OS
+.DS_Store
+Thumbs.db
