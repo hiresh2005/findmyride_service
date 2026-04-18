@@ -6,6 +6,9 @@ logs/
 # Playwright browser binaries
 .playwright/
 
+# Claude
+.claude/
+
 # OS
 .DS_Store
 Thumbs.db
